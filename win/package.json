@@ -1,0 +1,21 @@
+{
+  "name": "ice-dday",
+  "productName": "Ice D-day",
+  "version": "1.1.1",
+  "description": "바탕화면에 떠 있는 3D D-day 위젯 (Windows)",
+  "main": "main.js",
+  "private": true,
+  "author": "Ice D-day",
+  "scripts": {
+    "start": "node build-win.js --prepare && electron .",
+    "dist": "node build-win.js"
+  },
+  "dependencies": {
+    "@mediapipe/selfie_segmentation": "0.1.1675465747",
+    "koffi": "^2.16.3"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "45.1.0"
+  }
+}

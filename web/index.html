@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ice D-day</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  body { -webkit-user-select: none; user-select: none; cursor: default; }
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #label {
+    position: fixed; left: 0; right: 0; bottom: 4.1vw;
+    display: flex; flex-direction: column; align-items: center; gap: .6vw;
+    font-family: ui-rounded, "SF Pro Rounded", -apple-system, "Apple SD Gothic Neo", system-ui, "Segoe UI", "Malgun Gothic", sans-serif;
+    color: #fff; pointer-events: none;
+    text-shadow: 0 1px 2px rgba(0,40,80,.55), 0 0 12px rgba(0,60,120,.35);
+  }
+  #title { font-size: 4.4vw; font-weight: 600; letter-spacing: .02em; opacity: .95; }
+  #days  { font-size: 10vw; font-weight: 800; letter-spacing: .01em; line-height: 1.05; }
+  #pct   { font-size: 3.2vw; font-weight: 600; letter-spacing: .08em; opacity: .85; margin-top: .6vw; }
+  #label.small #days { font-size: 5vw; }
+  #label.party #days { color: #fff6c9; animation: pop 1.2s ease-in-out infinite; }
+  @keyframes pop { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="label"><div id="title"></div><div id="days"></div><div id="pct"></div></div>
+<script src="ice.bundle.js"></script>
+</body>
+</html>

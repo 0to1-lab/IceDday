@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>D-day 설정</title>
+<style>
+  :root { --bg: #f6f7f9; --card: #fff; --ink: #1d2433; --sub: #6b7385; --line: #dde1e8; --accent: #3b82c4; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1e2127; --card: #2a2e36; --ink: #eef1f6; --sub: #9aa3b2; --line: #3b414c; --accent: #6aaee8; } }
+  * { box-sizing: border-box; }
+  html, body { overflow: hidden; }
+  body { margin: 0; padding: 20px 22px; background: var(--bg); color: var(--ink);
+    font: 14px "Segoe UI", "Malgun Gothic", system-ui, sans-serif; user-select: none; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p.sub { margin: 0 0 16px; color: var(--sub); font-size: 12.5px; line-height: 1.5; }
+  label { display: block; font-size: 12.5px; color: var(--sub); margin: 12px 0 5px; }
+  input[type=text], input[type=date], select { width: 100%; height: 34px; padding: 0 10px; border: 1px solid var(--line);
+    border-radius: 7px; background: var(--card); color: var(--ink); font: inherit; }
+  .row { display: flex; gap: 10px; }
+  .row > div { flex: 1; }
+  .row > div.narrow { flex: 0 0 110px; }
+  button { height: 34px; padding: 0 16px; border-radius: 7px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .photo { display: flex; align-items: center; gap: 10px; }
+  .photo span { color: var(--sub); font-size: 12.5px; }
+  .size { display: flex; align-items: center; gap: 10px; }
+  .size input { flex: 1; }
+  .size output { width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+  .tip { margin: 18px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); color: var(--sub); font-size: 12px; line-height: 1.55; }
+  .tip b { color: var(--ink); }
+  .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+</style>
+</head>
+<body>
+  <h1>D-day 설정</h1>
+  <p class="sub">날짜를 바꾸면 처음 상태로 돌아가고, 그날부터 D-day까지 천천히 진행돼요.</p>
+
+  <div class="row">
+    <div><label for="theme">테마</label><select id="theme"></select></div>
+    <div class="narrow"><label for="color">오븐 색</label><select id="color"></select></div>
+  </div>
+
+  <label for="title">제목</label>
+  <input id="title" type="text" placeholder="예: 기말고사" maxlength="40">
+
+  <label for="date">D-day 날짜</label>
+  <input id="date" type="date">
+
+  <label>사진</label>
+  <div class="photo"><button id="photo">사진 고르기…</button><span id="photoState"></span></div>
+
+  <label for="size">크기</label>
+  <div class="size"><input id="size" type="range" min="50" max="135" step="5"><output id="sizeOut"></output></div>
+
+  <p class="tip">💡 메뉴(설정·사진·크기·<b>종료</b>)는 위젯을 <b>오른쪽 클릭</b>하거나, 작업 표시줄 오른쪽 아래 트레이의 Ice D-day 아이콘(안 보이면 <b>^</b>)에서 열 수 있어요.</p>
+
+  <div class="actions"><button id="cancel">취소</button><button id="save" class="primary">저장</button></div>
+
+<script>
+(async () => {
+  const api = window.iceSettings, $ = id => document.getElementById(id);
+  const s = await api.get();
+  if (!s) return;
+  if (s.heading) { document.querySelector('h1').textContent = s.heading; document.title = s.heading; }
+  $('theme').innerHTML = s.themes.map((t, i) => `<option value="${i}">${t}</option>`).join('');
+  $('theme').value = s.themeIndex;
+  $('color').innerHTML = s.colors.map(([k, n]) => `<option value="${k}">${n}</option>`).join('');
+  $('color').value = s.ovenColor;
+  $('title').value = s.title || '';
+  const d = new Date(); d.setDate(d.getDate() + 30);
+  const iso = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  $('date').value = s.target || iso(d);
+  $('photoState').textContent = s.hasPhoto ? '사진이 들어가 있어요' : '배경은 자동으로 지워져요';
+  const showSize = v => { $('size').value = Math.round(v * 100 / 5) * 5; $('sizeOut').textContent = $('size').value + '%'; };
+  showSize(s.scale);
+  $('size').oninput = () => { $('sizeOut').textContent = $('size').value + '%'; api.setScale($('size').value / 100); };
+  api.onScale(showSize);
+  $('photo').onclick = async () => { if (await api.pickPhoto()) $('photoState').textContent = '배경 지우는 중… 잠시 후 위젯에 나타나요'; };
+  $('cancel').onclick = () => window.close();
+  $('save').onclick = () => api.save({ title: $('title').value, target: $('date').value, themeIndex: +$('theme').value, ovenColor: $('color').value });
+  document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') $('save').click(); if (e.key === 'Escape') window.close(); });
+  $('title').focus();
+})();
+</script>
+</body>
+</html>
