@@ -17,7 +17,7 @@ const cutoutPath = id => path.join(SUPPORT, `cutout-${id}.png`);
 
 function readJSON(f) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return {}; } }
 const saved = readJSON(SETTINGS);
-const store = { onTop: !!saved.onTop, quality: saved.quality || 'auto', widgets: [] };
+const store = { onTop: !!saved.onTop, quality: saved.quality || 'auto', updateAlerted: saved.updateAlerted || '', widgets: [] };
 const blank = id => ({ id, title: '', target: null, start: null, theme: 'ice', variants: {}, ovenColor: 'red', scale: 1, pos: null });
 if (Array.isArray(saved.widgets)) store.widgets = saved.widgets.map(m => Object.assign(blank(m.id || newId()), m));
 else {
@@ -229,6 +229,38 @@ class Widget {
   }
 }
 
+// ───────── 새 버전 확인 (GitHub의 최신 릴리스 번호만 물어봄, 개인정보는 보내지 않음) ─────────
+const REPO = '0to1-lab/IceDday';
+let update = null;   // { version, url }
+function isNewer(a, b) {
+  const p = s => String(s).replace(/^v/i, '').split('.').map(x => parseInt(x, 10) || 0);
+  const x = p(a), y = p(b);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d > 0; }
+  return false;
+}
+async function checkForUpdate(manual) {
+  try {
+    const r = await net.fetch(process.env.ICE_UPDATE_API || `https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'IceDday' } });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    const v = String(j.tag_name || '').replace(/^v/i, '');
+    if (!v || !isNewer(v, app.getVersion())) {
+      if (manual) dialog.showMessageBox({ type: 'info', message: '최신 버전이에요', detail: `지금 쓰는 버전: v${app.getVersion()}` });
+      return;
+    }
+    update = { version: v, url: j.html_url || `https://github.com/${REPO}/releases/latest` };
+    refreshMenu();
+    if (manual || store.updateAlerted !== v) {        // 버전마다 한 번만 알림
+      store.updateAlerted = v; save();
+      tray?.displayBalloon({ title: `Ice D-day 새 버전(v${v})이 나왔어요`, content: '여기를 누르면 받는 곳이 열려요. D-day와 사진 설정은 그대로 이어져요.', iconType: 'info' });
+    }
+  } catch (e) {
+    if (manual) dialog.showMessageBox({ type: 'warning', message: '업데이트를 확인하지 못했어요', detail: '인터넷 연결을 확인하고 다시 시도해 주세요.' });
+  }
+}
+const openUpdate = () => update && shell.openExternal(update.url);
+const updateItems = () => update ? [{ label: `⬆ 새 버전 v${update.version} 받기`, click: openUpdate }, { type: 'separator' }] : [];
+
 // ───────── 위젯 추가 · 닫기 ─────────
 function addWidget() {
   const last = widgets[widgets.length - 1];
@@ -255,7 +287,7 @@ function widgetItems(w) {
   let lastGroup = '';
   THEMES.forEach((t, i) => {
     if (t.group !== lastGroup) { if (lastGroup) themeItems.push({ type: 'separator' }); themeItems.push({ label: t.group, enabled: false }); lastGroup = t.group; }
-    themeItems.push({ label: '   ' + t.name, type: 'radio', checked: i === cur, click: () => w.selectTheme(i) });
+    themeItems.push({ label: '   ' + t.name, type: 'checkbox', checked: i === cur, click: () => w.selectTheme(i) });   // 구역이 나뉘어도 체크는 하나만 (radio는 구역마다 따로 체크됨)
   });
   const sizes = [];
   for (let p = 50; p <= 135; p += 5) sizes.push({ label: `${p}%`, type: 'radio', checked: Math.round(w.m.scale * 100) === p, click: () => w.applyScale(p / 100) });
@@ -283,11 +315,12 @@ function appItems() {
     ] },
     { label: '항상 위에 표시', type: 'checkbox', checked: !!store.onTop, click: m => { store.onTop = m.checked; save(); widgets.forEach(w => { w.win.setAlwaysOnTop(m.checked); w.keepLayer(); }); } },
     { label: '로그인 시 자동 실행', type: 'checkbox', checked: app.getLoginItemSettings().openAtLogin, click: m => { app.setLoginItemSettings({ openAtLogin: m.checked }); refreshMenu(); } },
+    { label: `업데이트 확인 (지금 v${app.getVersion()})`, click: () => checkForUpdate(true) },
   ];
 }
 // 트레이 메뉴: 위젯이 하나면 바로 보이고, 여러 개면 위젯별 하위 메뉴
 function buildMenu() {
-  const t = [];
+  const t = [...updateItems()];
   if (widgets.length === 1) t.push(...widgetItems(widgets[0]));
   else {
     for (const w of widgets) t.push({ label: `${w.emoji}  ${w.name}  ${w.m.target ? w.progressInfo().label : ''}`, submenu: widgetItems(w) });
@@ -298,7 +331,7 @@ function buildMenu() {
 }
 // 위젯을 오른쪽 클릭했을 때: 그 위젯 메뉴 + 위젯 추가 + 종료
 function contextMenu(w) {
-  return Menu.buildFromTemplate([...widgetItems(w), { type: 'separator' }, { label: '＋ 위젯 추가', click: addWidget }, { label: '종료', click: () => app.quit() }]);
+  return Menu.buildFromTemplate([...updateItems(), ...widgetItems(w), { type: 'separator' }, { label: '＋ 위젯 추가', click: addWidget }, { label: '종료', click: () => app.quit() }]);
 }
 let lastMenuKey = '';
 function refreshMenu() { lastMenuKey = menuKey(); tray?.setContextMenu(buildMenu()); }
@@ -323,6 +356,7 @@ function makeTray() {
   tray.setToolTip('Ice D-day — 클릭하면 메뉴 (설정·위젯 추가·종료)');
   refreshMenu();
   tray.on('click', () => tray.popUpContextMenu());
+  tray.on('balloon-click', openUpdate);
   if (!widgets.some(w => w.m.target)) tray.displayBalloon({ title: 'Ice D-day가 켜졌어요', content: '설정·위젯 추가·종료는 위젯을 오른쪽 클릭하거나, 여기 트레이의 Ice D-day 아이콘에서 할 수 있어요.', iconType: 'info' });
 }
 
@@ -368,6 +402,8 @@ app.whenReady().then(() => {
   setInterval(() => { widgets.forEach(w => w.pushState()); if (menuKey() !== lastMenuKey) refreshMenu(); }, 60 * 1000);
   setInterval(() => widgets.forEach(w => w.updateClickThrough()), 50);
   setInterval(() => widgets.forEach(w => w.keepLayer()), 300);
+  setTimeout(() => checkForUpdate(false), 8000);                 // 켜고 8초 뒤, 그 뒤로 6시간마다 새 버전 확인
+  setInterval(() => checkForUpdate(false), 6 * 3600 * 1000);
   require('electron').powerMonitor.on('resume', () => widgets.forEach(w => w.pushState()));
   const keep = () => widgets.forEach(w => w.keepOnScreen());
   screen.on('display-removed', keep);

@@ -212,10 +212,12 @@ let quality = 'high', lite = false, perf = { t0: 0, n: 0, done: false };
 function setLite(on) {
   if (on === lite) return;
   lite = on;
-  FPS = lite ? 20 : 30;
-  renderer.setPixelRatio(lite ? 1 : Math.min(window.devicePixelRatio || 1, 2));
-  renderer.shadowMap.enabled = !lite; sun.castShadow = !lite; ground.visible = !lite;
-  renderer.transmissionResolutionScale = lite ? 0.5 : 1;
+  // 가볍게 모드도 모습은 최대한 지킴: 그림자는 유지(해상도만 낮춤), 얼음 굴절은 75%, 초당 24장
+  FPS = lite ? 24 : 30;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lite ? 1.25 : 2));
+  const ms = lite ? 512 : 1024;
+  if (sun.shadow.mapSize.x !== ms) { sun.shadow.mapSize.set(ms, ms); sun.shadow.map?.dispose(); sun.shadow.map = null; }
+  renderer.transmissionResolutionScale = lite ? 0.75 : 1;
   scene.traverse(o => { const ms = Array.isArray(o.material) ? o.material : [o.material]; ms.forEach(m => { if (m) m.needsUpdate = true; }); });
   resize();
   post({ type: 'lite', on: lite });

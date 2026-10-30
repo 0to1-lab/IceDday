@@ -146,6 +146,25 @@ enum Cutout {
     }
 }
 
+// MARK: - 새 버전 확인 (GitHub의 최신 릴리스 번호만 물어봄, 개인정보는 보내지 않음)
+
+enum Updater {
+    static let repo = "0to1-lab/IceDday"
+    static var current: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0" }
+    /// "v1.10" > "1.9" 처럼 숫자 단위로 비교
+    static func isNewer(_ a: String, than b: String) -> Bool {
+        func parts(_ s: String) -> [Int] {
+            s.trimmingCharacters(in: CharacterSet(charactersIn: "vV ")).split(separator: ".").map { part in Int(part.filter { ch in ch.isNumber }) ?? 0 }
+        }
+        let x = parts(a), y = parts(b)
+        for i in 0..<max(x.count, y.count) {
+            let p = i < x.count ? x[i] : 0, q = i < y.count ? y[i] : 0
+            if p != q { return p > q }
+        }
+        return false
+    }
+}
+
 // MARK: - 메뉴·버튼·슬라이더에 클로저를 바로 연결하는 도우미
 
 @MainActor
@@ -430,6 +449,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var widgets: [Widget] = []
     var statusItem: NSStatusItem!
     var settingsOpen = false
+    var update: (version: String, url: URL)?   // 새 버전이 있으면 채워짐
 
     func applicationDidFinishLaunching(_ note: Notification) {
         for (i, m) in Store.load().enumerated() { widgets.append(Widget(model: m, app: self, slot: i)) }
@@ -438,6 +458,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 1분마다 진행도 갱신, 0.05초마다 클릭 통과 판정 (타이머·알림은 모두 메인 스레드에서 실행됨)
         Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.pushAll() } }
+        // 새 버전 확인: 켜고 8초 뒤 한 번, 그 뒤로 6시간마다
+        Timer.scheduledTimer(withTimeInterval: 8, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.checkForUpdate(manual: false) } }
+        Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.checkForUpdate(manual: false) } }
         Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.widgets.forEach { $0.updateClickThrough() } } }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.pushAll() } }
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.widgets.forEach { $0.keepOnScreen() } } }
@@ -471,6 +494,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refreshMenu()
     }
 
+    // MARK: 새 버전 확인
+
+    func addUpdateItem(to m: NSMenu) {
+        guard let u = update else { return }
+        m.addItem(menuItem("⬆︎ 새 버전 v\(u.version) 받기") { NSWorkspace.shared.open(u.url) })
+        m.addItem(.separator())
+    }
+
+    func checkForUpdate(manual: Bool) {
+        guard let api = URL(string: "https://api.github.com/repos/\(Updater.repo)/releases/latest") else { return }
+        var req = URLRequest(url: api)
+        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        req.timeoutInterval = 15
+        let request = req
+        Task { [weak self] in
+            var tag: String?, page: URL?
+            if let result = try? await URLSession.shared.data(for: request),
+               let obj = try? JSONSerialization.jsonObject(with: result.0) as? [String: Any] {
+                tag = obj["tag_name"] as? String
+                page = (obj["html_url"] as? String).flatMap { URL(string: $0) }
+            }
+            self?.gotLatest(tag: tag, page: page, manual: manual)
+        }
+    }
+
+    func gotLatest(tag: String?, page: URL?, manual: Bool) {
+        guard let tag, let page else {
+            if manual { alert("업데이트를 확인하지 못했어요", "인터넷 연결을 확인하고 다시 시도해 주세요.") }
+            return
+        }
+        guard Updater.isNewer(tag, than: Updater.current) else {
+            if manual { alert("최신 버전이에요", "지금 쓰는 버전: v\(Updater.current)") }
+            return
+        }
+        let v = tag.hasPrefix("v") || tag.hasPrefix("V") ? String(tag.dropFirst()) : tag
+        update = (v, page)
+        refreshMenu()
+        // 버전마다 한 번만 알림 창 (직접 확인을 누른 경우엔 항상)
+        let key = "updateAlerted"
+        guard manual || (Store.d.string(forKey: key) != v && !settingsOpen) else { return }
+        Store.d.set(v, forKey: key)
+        NSApp.activate(ignoringOtherApps: true)
+        let a = NSAlert()
+        a.messageText = "Ice D-day 새 버전(v\(v))이 나왔어요"
+        a.informativeText = "새로 받은 앱으로 응용 프로그램 폴더의 앱을 바꿔 주면 돼요. D-day와 사진 설정은 그대로 이어져요."
+        a.addButton(withTitle: "받으러 가기")
+        a.addButton(withTitle: "나중에")
+        if a.runModal() == .alertFirstButtonReturn { NSWorkspace.shared.open(page) }
+    }
+
     // MARK: 메뉴바 아이콘
 
     func makeStatusItem() {
@@ -489,6 +562,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 메뉴바 ❄️ 메뉴: 위젯이 하나면 바로 보이고, 여러 개면 위젯별 하위 메뉴
     func buildMenu() -> NSMenu {
         let m = NSMenu()
+        addUpdateItem(to: m)
         if widgets.count == 1, let w = widgets.first {
             widgetItems(w).forEach { m.addItem($0) }
         } else {
@@ -508,6 +582,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         m.addItem(.separator())
         m.addItem(menuItem("＋ 위젯 추가") { [weak self] in self?.addWidget() })
         m.addItem(menuItem("로그인 시 자동 실행", on: SMAppService.mainApp.status == .enabled) { [weak self] in self?.toggleLogin() })
+        m.addItem(menuItem("업데이트 확인 (지금 v\(Updater.current))") { [weak self] in self?.checkForUpdate(manual: true) })
         m.addItem(.separator())
         m.addItem(menuItem("종료") { NSApp.terminate(nil) })
         return m
@@ -516,6 +591,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 위젯을 오른쪽 클릭했을 때: 그 위젯 메뉴 + 위젯 추가 + 종료
     func contextMenu(for w: Widget) -> NSMenu {
         let m = NSMenu()
+        addUpdateItem(to: m)
         widgetItems(w).forEach { m.addItem($0) }
         m.addItem(.separator())
         m.addItem(menuItem("＋ 위젯 추가") { [weak self] in self?.addWidget() })

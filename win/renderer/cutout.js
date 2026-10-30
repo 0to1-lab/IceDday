@@ -45,9 +45,22 @@
     const D = new Float32Array(w * h);
     for (let i = 0, j = 0; i < w * h; i++, j += 4) D[i] = d[j + 3] < 10 ? 0 : dist(d[j], d[j + 1], d[j + 2], bg);
     // 가장자리와 이어진 배경색 영역만 지움 (주인공 안쪽의 같은 색은 남김)
+    // 선 그림(흰 캐릭터 + 검은 테두리)은 테두리에 작은 틈이 있으면 안쪽까지 지워지므로,
+    // 테두리를 r픽셀 두껍게 한 '벽'을 세워 그 벽을 넘지 못하게 지운 뒤, 벽 두께만큼만 다시 깎아 냄
+    const r = Math.max(2, Math.round(Math.max(w, h) / 450));
+    const wall = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) wall[i] = D[i] >= TOL ? 1 : 0;
+    for (let k = 0; k < r; k++) {                // 벽 두껍게 (한 번에 1픽셀씩)
+      const prev = wall.slice();
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        if (prev[i]) continue;
+        if ((x > 0 && prev[i - 1]) || (x < w - 1 && prev[i + 1]) || (y > 0 && prev[i - w]) || (y < h - 1 && prev[i + w])) wall[i] = 2;
+      }
+    }
     const seen = new Uint8Array(w * h), q = new Int32Array(w * h);
     let qh = 0, qt = 0;
-    const seed = i => { if (!seen[i] && D[i] < REACH) { seen[i] = 1; q[qt++] = i; } };
+    const seed = i => { if (!seen[i] && !wall[i] && D[i] < REACH) { seen[i] = 1; q[qt++] = i; } };
     for (let x = 0; x < w; x++) { seed(x); seed((h - 1) * w + x); }
     for (let y = 0; y < h; y++) { seed(y * w); seed(y * w + w - 1); }
     while (qh < qt) {
@@ -55,6 +68,20 @@
       if (D[i] >= TOL) continue;               // 경계 부근은 퍼뜨리지 않음
       if (x > 0) seed(i - 1); if (x < w - 1) seed(i + 1);
       if (y > 0) seed(i - w); if (y < h - 1) seed(i + w);
+    }
+    // 벽 두께로 덮였던 바깥쪽 배경을 r+1 단계만 더 지움 (틈으로는 r픽셀까지만 들어가서 안쪽은 안전)
+    let front = [];
+    for (let i = 0; i < w * h; i++) if (seen[i] && D[i] < TOL) front.push(i);
+    for (let k = 0; k <= r && front.length; k++) {
+      const next = [];
+      for (const i of front) {
+        const x = i % w;
+        for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w]) {
+          if (j < 0 || j >= w * h || seen[j] || D[j] >= REACH) continue;   // 테두리 옆 흐린 픽셀은 반투명으로
+          seen[j] = 1; if (D[j] < TOL) next.push(j);
+        }
+      }
+      front = next;
     }
     let fg = 0;
     for (let i = 0; i < w * h; i++) {

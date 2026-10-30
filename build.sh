@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 NAME="Ice D-day"
 EXEC="IceDday"
 APP="build/$NAME.app"
-VERSION="1.1"
+VERSION="1.2"
 
 if ! command -v swiftc >/dev/null 2>&1; then
   echo "⚠️  Swift 컴파일러가 없어요. 아래 명령으로 Command Line Tools를 먼저 설치해 주세요:"
