@@ -141,7 +141,7 @@ export function createEgg(ctx) {
   let props = null, crumbs = [], crumbGroup = null, wob = 0;
   // 알 뒤로 은은하게 퍼지는 빛 — 화면을 따라 돌지 않게 world에 둠
   const backC = makeCanvas(512), backTex = toTex(backC);
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 3.6), new THREE.MeshBasicMaterial({ map: backTex, transparent: true, depthWrite: false, opacity: 0 }));
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(2.7, 2.7), new THREE.MeshBasicMaterial({ map: backTex, transparent: true, depthWrite: false, opacity: 0 }));
   back.position.set(0, 0.95, -0.9); back.renderOrder = -2; back.userData.noBounds = true;
   ctx.world.add(back);
   const GLOW = { white: [0xffd9a6, 1.0], brown: [0xffc690, 0.8], dino: [0xf3e2a8, 0.85], fantasy: [0xe0b8ff, 1.0] };
@@ -328,6 +328,7 @@ export function createEgg(ctx) {
 
   return {
     word: '부화',
+    sounds: { click: 'crackSmall', dday: 'crack' },
     setVariant(v) {
       const t = EGG_TYPES.includes(v) ? v : 'white';
       if (t === type) return;

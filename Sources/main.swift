@@ -41,7 +41,7 @@ struct WidgetModel: Codable {
     var variant: String { variants[theme] ?? Catalog.themes.first { $0.theme == theme }?.variant ?? "cube" }
     var clampedScale: Double { min(Catalog.scaleRange.upperBound, max(Catalog.scaleRange.lowerBound, scale)) }
     var displayName: String { title.isEmpty ? "D-day" : title }
-    var emoji: String { theme == "oven" ? "🍞" : theme == "egg" ? "🥚" : "❄️" }
+    var emoji: String { ["oven": "🍞", "egg": "🥚", "tree": "🎄", "moon": "🌙", "confession": "⛪"][theme] ?? "❄️" }
     var themeIndex: Int {
         Catalog.themes.firstIndex { $0.theme == theme && $0.variant == variant } ?? Catalog.themes.firstIndex { $0.theme == theme } ?? 0
     }
@@ -67,6 +67,9 @@ enum Catalog {
         ("ice", "cube", "얼음", "각얼음"), ("ice", "ball", "얼음", "얼음 공"), ("ice", "chunk", "얼음", "수정 모양 얼음"),
         ("oven", "retro", "오븐", "레트로 오븐"),
         ("egg", "white", "알", "하얀 달걀"), ("egg", "brown", "알", "갈색 달걀"), ("egg", "dino", "알", "공룡알"), ("egg", "fantasy", "알", "판타지 알"),
+        ("tree", "warm", "트리", "따뜻한 전구 트리"), ("tree", "multi", "트리", "알록달록 트리"),
+        ("moon", "night", "달", "달과 늑대"),
+        ("confession", "walnut", "Confession Room", "Confession Room"),
     ]
     // 레트로 오븐 색
     static let ovenColors: [(key: String, name: String)] = [("red", "빨강"), ("mint", "민트"), ("cream", "크림"), ("sky", "하늘색"), ("black", "검정")]
@@ -86,6 +89,11 @@ enum Paths {
 
 enum Store {
     static let d = UserDefaults.standard
+    // 효과음 켜기/끄기 (모든 위젯 공통, 기본 켜짐)
+    static var soundOn: Bool {
+        get { d.object(forKey: "soundOn") as? Bool ?? true }
+        set { d.set(newValue, forKey: "soundOn") }
+    }
 
     static func load() -> [WidgetModel] {
         if let data = d.data(forKey: "widgets"), let list = try? JSONDecoder().decode([WidgetModel].self, from: data) {
@@ -308,6 +316,7 @@ final class Widget: NSObject, WKScriptMessageHandler {
 
         let config = WKWebViewConfiguration()
         config.userContentController.add(self, name: "ice")
+        config.mediaTypesRequiringUserActionForAudioPlayback = []   // 테마 효과음 (클릭은 네이티브 뷰가 받아서 웹에는 '사용자 동작'이 안 잡힘)
         web = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: config)
         web.setValue(false, forKey: "drawsBackground")      // 웹뷰 배경 투명
         web.underPageBackgroundColor = .clear
@@ -315,7 +324,12 @@ final class Widget: NSObject, WKScriptMessageHandler {
 
         dragView = DragView(frame: NSRect(origin: .zero, size: size))
         dragView.autoresizingMask = [.width, .height]
-        dragView.onClick = { [weak self] _ in self?.js("IceDday.poke()") }
+        // 클릭한 곳을 0~1 비율(왼쪽 위 기준)로 넘겨서, 테마가 무엇을 눌렀는지 알 수 있게 (고해실 자물쇠·문 등)
+        dragView.onClick = { [weak self] p in
+            guard let self, let v = self.dragView, v.bounds.width > 0, v.bounds.height > 0 else { return }
+            let nx = Double(p.x / v.bounds.width), ny = Double(1 - p.y / v.bounds.height)
+            self.js("IceDday.poke(\(nx), \(ny))")
+        }
         dragView.onMenu = { [weak self] e in
             guard let self, let app = self.app, let v = self.dragView else { return }
             NSMenu.popUpContextMenu(app.contextMenu(for: self), with: e, for: v)
@@ -427,6 +441,7 @@ final class Widget: NSObject, WKScriptMessageHandler {
         switch type {
         case "ready":
             webReady = true
+            js("IceDday.setSound(\(Store.soundOn))")
             pushState()
             pushPhoto()
             if model.target == nil {   // 날짜가 없으면 바로 정할 수 있게
@@ -581,6 +596,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         m.addItem(.separator())
         m.addItem(menuItem("＋ 위젯 추가") { [weak self] in self?.addWidget() })
+        m.addItem(menuItem("효과음", on: Store.soundOn) { [weak self] in
+            Store.soundOn.toggle()
+            self?.widgets.forEach { $0.js("IceDday.setSound(\(Store.soundOn))") }
+            self?.refreshMenu()
+        })
         m.addItem(menuItem("로그인 시 자동 실행", on: SMAppService.mainApp.status == .enabled) { [weak self] in self?.toggleLogin() })
         m.addItem(menuItem("업데이트 확인 (지금 v\(Updater.current))") { [weak self] in self?.checkForUpdate(manual: true) })
         m.addItem(.separator())

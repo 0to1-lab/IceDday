@@ -4,8 +4,8 @@
   "private": true,
   "description": "바탕화면에 떠 있는 녹는 얼음 D-day (macOS)",
   "scripts": {
-    "build:web": "esbuild src/main.js --bundle --minify --format=iife --outfile=web/ice.bundle.js",
-    "watch:web": "esbuild src/main.js --bundle --format=iife --outfile=web/ice.bundle.js --watch"
+    "build:web": "esbuild src/main.js --bundle --minify --format=iife --loader:.mp3=binary --outfile=web/ice.bundle.js",
+    "watch:web": "esbuild src/main.js --bundle --format=iife --loader:.mp3=binary --outfile=web/ice.bundle.js --watch"
   },
   "dependencies": { "three": "^0.186.1" },
   "devDependencies": { "esbuild": "*" }

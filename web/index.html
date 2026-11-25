@@ -5,9 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ice D-day</title>
 <style>
+  /* D-day 숫자 글씨체: Grenze Gotisch (SIL OFL, web/fonts/OFL-GrenzeGotisch.txt) */
+  @font-face { font-family: 'Grenze Gotisch'; src: url('fonts/GrenzeGotisch-700.woff2') format('woff2'); font-weight: 700; font-display: block; }
   html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
   body { -webkit-user-select: none; user-select: none; cursor: default; }
-  #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block;
+    /* 위젯 가장자리로 갈수록 서서히 투명하게: 뒤 빛(후광)이 창 테두리에서 잘려 네모난 경계가 보이지 않게 */
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 9%, #000 91%, transparent 100%), linear-gradient(to bottom, transparent 0, #000 7%, #000 93%, transparent 100%);
+    -webkit-mask-composite: source-in; mask-composite: intersect; }
   #label {
     position: fixed; left: 0; right: 0; bottom: 4.1vw;
     display: flex; flex-direction: column; align-items: center; gap: .6vw;
@@ -16,7 +21,7 @@
     text-shadow: 0 1px 2px rgba(0,40,80,.55), 0 0 12px rgba(0,60,120,.35);
   }
   #title { font-size: 4.4vw; font-weight: 600; letter-spacing: .02em; opacity: .95; }
-  #days  { font-size: 10vw; font-weight: 800; letter-spacing: .01em; line-height: 1.05; }
+  #days  { font-family: 'Grenze Gotisch', ui-rounded, sans-serif; font-size: 11.5vw; font-weight: 700; letter-spacing: .02em; line-height: 1.05; }
   #pct   { font-size: 3.2vw; font-weight: 600; letter-spacing: .08em; opacity: .85; margin-top: .6vw; }
   #label.small #days { font-size: 5vw; }
   #label.party #days { color: #fff6c9; animation: pop 1.2s ease-in-out infinite; }

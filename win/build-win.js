@@ -15,6 +15,7 @@ function prepare() {
     .replace('<script src="ice.bundle.js"></script>',
       '<script>window.ICE_EXTERNAL_UI = true;</script>\n<script src="ice.bundle.js"></script>\n<script src="cutout.js"></script>\n<script src="input.js"></script>');
   fs.writeFileSync(path.join(__dirname, 'renderer', 'widget.html'), html);
+  fs.cpSync(path.join(ROOT, 'web', 'fonts'), path.join(__dirname, 'renderer', 'fonts'), { recursive: true });   // D-day 글씨체
 }
 
 async function dist() {

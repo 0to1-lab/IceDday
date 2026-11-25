@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 NAME="Ice D-day"
 EXEC="IceDday"
 APP="build/$NAME.app"
-VERSION="1.2"
+VERSION="1.3.0"
 
 if ! command -v swiftc >/dev/null 2>&1; then
   echo "⚠️  Swift 컴파일러가 없어요. 아래 명령으로 Command Line Tools를 먼저 설치해 주세요:"
@@ -37,6 +37,7 @@ rm -f "${BINS[@]}"
 
 # 웹(3D 장면) 파일
 cp web/index.html web/ice.bundle.js "$APP/Contents/Resources/web/"
+mkdir -p "$APP/Contents/Resources/web/fonts" && cp web/fonts/* "$APP/Contents/Resources/web/fonts/"
 
 # 앱 아이콘
 if [ -f assets/icon.png ]; then

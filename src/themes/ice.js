@@ -275,6 +275,7 @@ export function createIce(ctx) {
 
   return {
     word: '해동',
+    sounds: { click: 'clink', dday: 'shatter' },
     setVariant(v) {
       const s = ICE_SHAPES.includes(v) ? v : 'cube';
       if (s === shape) return;

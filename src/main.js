@@ -7,12 +7,19 @@ import { canvasTex, dotTex, disposeTree, markShadows } from './util.js';
 import { createIce } from './themes/ice.js';
 import { createOven } from './themes/oven.js';
 import { createEgg } from './themes/egg.js';
+import { createTree } from './themes/tree.js';
+import { createMoon } from './themes/moon.js';
+import { createConfession } from './themes/confession.js';
+import { Sound } from './sound.js';
 
 let FPS = 30;                                     // 배터리 아끼려고 30fps (가볍게 모드는 20fps)
 const THEMES = {
   ice: { make: createIce, variants: ['cube', 'ball', 'chunk'] },
   oven: { make: createOven, variants: ['retro'] },
   egg: { make: createEgg, variants: ['white', 'brown', 'dino', 'fantasy'] },
+  tree: { make: createTree, variants: ['warm', 'multi'] },
+  moon: { make: createMoon, variants: ['night'] },
+  confession: { make: createConfession, variants: ['walnut'] },
 };
 
 const state = { progress: 0, title: '', daysLabel: '', celebrate: false, theme: 'ice', variant: 'cube', color: 'red' };
@@ -71,8 +78,9 @@ let theme = null, themeGroup = null, themeWorld = null;
 function makeTheme(name, variant) {
   if (theme) {
     root.remove(themeGroup); scene.remove(themeWorld);
-    disposeTree(themeGroup, new Set([photo.tex, placeholderTex]));
-    disposeTree(themeWorld, new Set([photo.tex, placeholderTex]));
+    const keep = new Set([photo.tex, placeholderTex].filter(Boolean));
+    disposeTree(themeGroup, keep);
+    disposeTree(themeWorld, keep);
   }
   themeGroup = new THREE.Group(); themeWorld = new THREE.Group();
   root.add(themeGroup); scene.add(themeWorld);
@@ -110,6 +118,7 @@ for (let i = 0; i < 10; i++) {
 }
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3();
 function updateCelebrate(dt, t, on) {
+  if (theme && theme.confetti === false) on = false;      // 달·고해실처럼 조용한 테마는 꽃가루 없음
   confetti.visible = on;
   sparkles.forEach(s => { s.visible = on; });
   if (!on) return;
@@ -176,17 +185,32 @@ window.IceDday = {
       if (old !== placeholderTex) old.dispose();
     });
   },
-  // 클릭했을 때 테마 반응 (얼음: 한 바퀴, 오븐: 문 열기, 알: 흔들기)
-  poke() {
-    const r = theme?.poke() || {};
+  // 두 번째 이미지 (달 테마에서 점점 흐려지는 쪽). url이 없으면 테마 기본 그림으로
+
+  // 클릭했을 때 테마 반응 (얼음: 한 바퀴, 오븐: 문 열기, 알: 흔들기 …)
+  // nx, ny: 클릭한 곳 (0~1, 왼쪽 위 기준). 있으면 무엇을 눌렀는지 찾아서 테마에 알려 줌
+  poke(nx, ny) {
+    Sound.unlock();
+    let hit = null;
+    if (typeof nx === 'number' && typeof ny === 'number') {
+      ray.setFromCamera(_ndc.set(nx * 2 - 1, -(ny * 2 - 1)), camera);
+      root.updateMatrixWorld(true);
+      hit = ray.intersectObjects([themeGroup, themeWorld], true).find(h => h.object.visible && !h.object.userData.noBounds)?.object || null;
+    }
+    // D-day가 됐는데 아직 소리를 못 들려줬으면 (밤 12시에 갑자기 울리지 않게) 처음 클릭할 때 울림
+    if (ddayPending) { ddayPending = false; Sound.play(theme?.sounds?.dday); theme?.replay?.(); return; }
+    const r = theme?.poke(hit) || {};
     if (r.spin) yawVel += r.spin;
+    if (r.sound !== null) Sound.play(r.sound || theme?.sounds?.click);
   },
+  setSound(on) { Sound.setEnabled(on); },
+  unlockSound() { Sound.unlock(); },
   // 마우스가 위젯 위에 있는지 (지금은 쓰지 않음, 앱 호환용)
   setHover(on) { document.body.classList.toggle('hover', !!on); },
   // 길게 눌러 옮기는 중: 살짝 커지고 떠오름
   setLifted(on) { lifted = !!on; },
   // 처음부터 끝까지 8초 동안 보여주기
-  preview() { preview = performance.now(); },
+  preview() { preview = performance.now(); Sound.unlock(); },
   // 끌어서 돌리기: 끄는 동안 dx(픽셀)만큼 회전, 놓으면 관성으로 조금 더 돌다 멈춤
   spin(dx) {
     const now = performance.now(), dt = Math.max(8, now - lastSpinT) / 1000;
@@ -276,6 +300,8 @@ if (window.ResizeObserver) new ResizeObserver(resize).observe(canvas);
 resize();
 
 let lastBuilt = -1, last = performance.now(), acc = 0, hitTimer = 0;
+let wasCelebrating = false, ddayPending = false;
+const ray = new THREE.Raycaster(), _ndc = new THREE.Vector2();
 const clock0 = performance.now();
 window.IceDday.setState({});
 
@@ -305,6 +331,13 @@ function frame(now) {
   }
 
   const celebrating = preview ? previewParty : !!state.celebrate;
+  // D-day 소리: 미리보기는 바로, 실제 D-day는 소리를 낼 수 있을 때(사용자가 한 번이라도 눌렀으면) 바로, 아니면 다음 클릭에
+  if (celebrating && !wasCelebrating) {
+    if (preview || Sound.unlocked) Sound.play(theme?.sounds?.dday);
+    else ddayPending = true;
+  }
+  if (!celebrating) ddayPending = false;
+  wasCelebrating = celebrating;
   if (!spinning) { yaw += yawVel * step; yawVel *= Math.pow(0.04, step); }
   root.rotation.y = 0.45 + yaw + Math.sin(t * 0.35) * 0.25;   // 살랑살랑 + 마우스 회전
   liftK += ((lifted ? 1 : 0) - liftK) * Math.min(1, step * 12);
@@ -337,10 +370,11 @@ if (!native) {
     if (moved > 4) IceDday.spin(dx);
     px = e.clientX;
   });
-  const end = () => {
+  const end = (e) => {
     if (px === null) return;
     px = null; canvas.style.cursor = 'grab';
-    if (moved > 4) IceDday.spinEnd(); else IceDday.poke();
+    const r = canvas.getBoundingClientRect();
+    if (moved > 4) IceDday.spinEnd(); else IceDday.poke((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
   };
   canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
   document.addEventListener('pointerenter', () => IceDday.setHover(true));
@@ -354,7 +388,8 @@ if (!native && !window.ICE_EXTERNAL_UI) {
   bar.style.cssText = 'position:fixed;top:8px;left:8px;right:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font:12px -apple-system,sans-serif;color:#fff;z-index:9';
   const opts = [['ice', 'cube', '얼음 · 각얼음'], ['ice', 'ball', '얼음 · 공'], ['ice', 'chunk', '얼음 · 수정 모양'],
     ['oven', 'retro', '오븐'],
-    ['egg', 'white', '알 · 하얀 달걀'], ['egg', 'brown', '알 · 갈색 달걀'], ['egg', 'dino', '알 · 공룡알'], ['egg', 'fantasy', '알 · 판타지']];
+    ['egg', 'white', '알 · 하얀 달걀'], ['egg', 'brown', '알 · 갈색 달걀'], ['egg', 'dino', '알 · 공룡알'], ['egg', 'fantasy', '알 · 판타지'],
+    ['tree', 'warm', '트리 · 따뜻한 전구'], ['tree', 'multi', '트리 · 알록달록'], ['moon', 'night', '달'], ['confession', 'walnut', 'Confession Room']];
   bar.innerHTML = '<input type="range" min="0" max="1000" value="0" style="flex:1;min-width:120px"><select>' +
     opts.map((o, i) => `<option value="${i}">${o[2]}</option>`).join('') + '</select><select id="dev-color"><option value="red">빨강</option><option value="mint">민트</option><option value="cream">크림</option><option value="sky">하늘색</option><option value="black">검정</option></select><label><input type="checkbox"> D-day</label><button>▶</button>';
   document.body.appendChild(bar);

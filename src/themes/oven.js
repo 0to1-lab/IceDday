@@ -379,6 +379,7 @@ export function createOven(ctx) {
 
   return {
     word: '구움',
+    sounds: { click: 'crackle', dday: 'ovenDday' },
     setVariant() {},                                  // 레트로 오븐 한 종류 (색만 고름)
     setColor(c) { color = OVEN_COLORS[c] !== undefined ? c : 'red'; applyColor(); },
     setPhoto(ph) {

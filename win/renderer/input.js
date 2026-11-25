@@ -35,14 +35,16 @@
     else if (moved) IceDday.spin(e.screenX - lx);
     lx = e.screenX;
   });
+  // 클릭한 곳 (0~1, 왼쪽 위 기준) → 테마가 무엇을 눌렀는지 알 수 있게 (고해실 자물쇠·문 등)
+  const pokeAt = (e) => (e && typeof e.clientX === 'number') ? IceDday.poke(e.clientX / window.innerWidth, e.clientY / window.innerHeight) : IceDday.poke();
   function end(e) {
     if (!down) return;
     const cancel = e && e.type !== 'pointerup';
     down = false; clearTimeout(timer); last = null;
     // 컴퓨터가 버벅여서 '길게 누르기' 타이머가 늦게 돌아도, 실제로 짧게 눌렀다 뗐으면 클릭으로 처리
     const quick = !cancel && e && e.timeStamp && e.timeStamp - downAt < 350 && !moved;
-    if (moveMode) { IceDday.setLifted(false); api.postMessage({ type: 'move-end' }); document.body.style.cursor = ''; if (quick) IceDday.poke(); }
-    else if (!moved) { if (!cancel) IceDday.poke(); }
+    if (moveMode) { IceDday.setLifted(false); api.postMessage({ type: 'move-end' }); document.body.style.cursor = ''; if (quick) pokeAt(e); }
+    else if (!moved) { if (!cancel) pokeAt(e); }
     else IceDday.spinEnd();
     moveMode = false;
     api.postMessage({ type: 'drag', on: false });

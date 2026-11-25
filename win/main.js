@@ -17,7 +17,7 @@ const cutoutPath = id => path.join(SUPPORT, `cutout-${id}.png`);
 
 function readJSON(f) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return {}; } }
 const saved = readJSON(SETTINGS);
-const store = { onTop: !!saved.onTop, quality: saved.quality || 'auto', updateAlerted: saved.updateAlerted || '', widgets: [] };
+const store = { onTop: !!saved.onTop, quality: saved.quality || 'auto', updateAlerted: saved.updateAlerted || '', soundOn: saved.soundOn !== false, widgets: [] };
 const blank = id => ({ id, title: '', target: null, start: null, theme: 'ice', variants: {}, ovenColor: 'red', scale: 1, pos: null });
 if (Array.isArray(saved.widgets)) store.widgets = saved.widgets.map(m => Object.assign(blank(m.id || newId()), m));
 else {
@@ -41,6 +41,9 @@ const THEMES = [
   ['ice', 'cube', '얼음', '각얼음'], ['ice', 'ball', '얼음', '얼음 공'], ['ice', 'chunk', '얼음', '수정 모양 얼음'],
   ['oven', 'retro', '오븐', '레트로 오븐'],
   ['egg', 'white', '알', '하얀 달걀'], ['egg', 'brown', '알', '갈색 달걀'], ['egg', 'dino', '알', '공룡알'], ['egg', 'fantasy', '알', '판타지 알'],
+  ['tree', 'warm', '트리', '따뜻한 전구 트리'], ['tree', 'multi', '트리', '알록달록 트리'],
+  ['moon', 'night', '달', '달과 늑대'],
+  ['confession', 'walnut', 'Confession Room', 'Confession Room'],
 ].map(([theme, variant, group, name]) => ({ theme, variant, group, name }));
 const OVEN_COLORS = [['red', '빨강'], ['mint', '민트'], ['cream', '크림'], ['sky', '하늘색'], ['black', '검정']];
 const IMG_EXT = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.bmp': 'image/bmp', '.avif': 'image/avif' };
@@ -52,6 +55,7 @@ const widgets = [];
 const refreshSoon = (ms = 300) => { clearTimeout(menuTimer); menuTimer = setTimeout(refreshMenu, ms); };
 
 // 앱 파일을 app:// 주소로 열어서 누끼 모델(wasm)도 문제없이 읽히게 함
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');   // 테마 효과음
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
 
 const dayStart = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
@@ -76,9 +80,19 @@ class Widget {
     win.loadURL('app://ice/renderer/widget.html');
     win.once('ready-to-show', () => { win.showInactive(); this.keepLayer(); });
     win.on('focus', () => this.keepLayer());     // 클릭해서 앞으로 올라와도 바로 바탕화면 층으로 돌려보냄
+    // Alt+F4 등으로 위젯 창만 닫히지 않게 막음 (위젯은 메뉴의 '이 위젯 닫기'로만 없앰)
+    win.on('close', e => { if (!quitting) e.preventDefault(); });
+    // 그래픽 처리가 죽으면(절전 복귀 등) 위젯 화면을 다시 불러옴
+    win.webContents.on('render-process-gone', (_e, d) => {
+      if (quitting || !this.alive) return;
+      console.error('위젯 화면 다시 불러옴:', d && d.reason);
+      this.ready = false; this.hit = null;
+      setTimeout(() => { if (this.alive) win.webContents.reload(); }, 1000);
+    });
+    win.webContents.on('unresponsive', () => { if (this.alive && !quitting) win.webContents.forcefullyCrashRenderer(); });   // 오래 멈추면 강제로 다시 시작
   }
   get name() { return this.m.title || 'D-day'; }
-  get emoji() { return this.m.theme === 'oven' ? '🍞' : this.m.theme === 'egg' ? '🥚' : '❄️'; }
+  get emoji() { return { oven: '🍞', egg: '🥚', tree: '🎄', moon: '🌙', confession: '⛪' }[this.m.theme] || '❄️'; }
   variant() { return this.m.variants[this.m.theme] || THEMES.find(t => t.theme === this.m.theme).variant; }
   themeIndex() { return Math.max(0, THEMES.findIndex(t => t.theme === this.m.theme && t.variant === this.variant())); }
   size() { const k = Math.min(SCALE_MAX, Math.max(SCALE_MIN, this.m.scale || 1)); return { width: Math.round(BASE.w * k), height: Math.round(BASE.h * k) }; }
@@ -86,6 +100,7 @@ class Widget {
 
   // 화면 오른쪽 아래부터 왼쪽으로 한 칸씩
   resetPosition(slot = 0) {
+    if (!this.alive) return;
     const wa = screen.getPrimaryDisplay().workArea, { width, height } = this.size();
     const x = Math.max(wa.x + 20, wa.x + wa.width - width - 40 - Math.round(slot * width * 0.85));
     const b = { x, y: wa.y + wa.height - height - 20, width, height };
@@ -93,6 +108,7 @@ class Widget {
     this.m.pos = { x: b.x, y: b.y }; save();
   }
   keepOnScreen() {
+    if (!this.alive) return;
     const b = this.win.getBounds();
     const ok = screen.getAllDisplays().some(d => {
       const a = d.workArea;
@@ -102,6 +118,7 @@ class Widget {
   }
   // 크기 바꾸기: 바닥 가운데를 기준으로 (50% ~ 135%)
   applyScale(v) {
+    if (!this.alive) return;
     v = Math.min(SCALE_MAX, Math.max(SCALE_MIN, v));
     if (Math.abs(v - this.m.scale) < 0.0005) return;
     const old = this.win.getBounds();
@@ -118,7 +135,10 @@ class Widget {
   keepLayer() { if (!store.onTop && !this.win.isDestroyed()) pinToDesktop(this.win); }
 
   // 클릭 통과: 물체가 없는 투명한 곳은 바탕화면이 클릭되게
+  get alive() { return this.win && !this.win.isDestroyed(); }
+
   updateClickThrough() {
+    if (!this.alive) return;
     let want = false;
     if (!this.dragging && this.hit) {
       const b = this.win.getBounds(), m = screen.getCursorScreenPoint(), pad = 6, h = this.hit;
@@ -206,11 +226,13 @@ class Widget {
 
   // 위젯 화면에서 오는 메시지
   onMessage(m) {
+    if (!this.alive) return;
     const win = this.win;
     switch (m.type) {
       case 'ready':
         this.ready = true;
         this.js(`IceDday.setQuality(${JSON.stringify(store.quality)})`);
+        this.js(`IceDday.setSound(${store.soundOn})`);
         this.pushState();
         this.pushPhoto();
         if (!this.m.target) setTimeout(() => this.openSettings(), 600);     // 날짜가 없으면 바로 정할 수 있게
@@ -313,6 +335,7 @@ function appItems() {
       { type: 'separator' },
       { label: '성능 정보 보기', click: showPerf },
     ] },
+    { label: '효과음', type: 'checkbox', checked: store.soundOn, click: m => { store.soundOn = m.checked; save(); widgets.forEach(w => w.js(`IceDday.setSound(${m.checked})`)); } },
     { label: '항상 위에 표시', type: 'checkbox', checked: !!store.onTop, click: m => { store.onTop = m.checked; save(); widgets.forEach(w => { w.win.setAlwaysOnTop(m.checked); w.keepLayer(); }); } },
     { label: '로그인 시 자동 실행', type: 'checkbox', checked: app.getLoginItemSettings().openAtLogin, click: m => { app.setLoginItemSettings({ openAtLogin: m.checked }); refreshMenu(); } },
     { label: `업데이트 확인 (지금 v${app.getVersion()})`, click: () => checkForUpdate(true) },
@@ -388,7 +411,8 @@ ipcMain.on('ice', (e, m) => { if (m) byWidget(e)?.onMessage(m); });
 // ───────── 시작 ─────────
 app.on('second-instance', () => widgets[0]?.openSettings());
 app.on('window-all-closed', () => { /* 트레이에 남아 있음 */ });
-app.on('before-quit', saveNow);
+let quitting = false;
+app.on('before-quit', () => { quitting = true; saveNow(); });
 app.whenReady().then(() => {
   protocol.handle('app', req => {
     const u = new URL(req.url);
@@ -413,6 +437,8 @@ app.whenReady().then(() => {
 // 개발용 자가 점검: ICE_SELFTEST=폴더 로 실행하면 화면을 찍어 저장하고 종료 (ICE_SELFTEST_ADD=1 이면 위젯 하나 추가)
 if (process.env.ICE_SELFTEST) app.whenReady().then(() => {
   if (process.env.ICE_SELFTEST_ADD) setTimeout(addWidget, 1500);
+  if (process.env.ICE_SELFTEST_CLOSE) setTimeout(() => { widgets[0]?.win.close(); }, 3000);   // Alt+F4 흉내
+  if (process.env.ICE_SELFTEST_CRASH) setTimeout(() => { widgets[0]?.win.webContents.forcefullyCrashRenderer(); }, 3000);   // 그래픽 죽음 흉내
   setTimeout(async () => {
     const out = process.env.ICE_SELFTEST;
     try {

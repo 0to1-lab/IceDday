@@ -11,6 +11,11 @@
 | ❄️ 얼음 (각얼음·얼음 공·수정 모양) | 성에가 걷히며 사진이 또렷해지고, 위에서부터 녹아내림 | 한 바퀴 휙 돌기 | 사진이 풀려나 통통 |
 | 🍞 오븐 (레트로 오븐, 색 5가지) | 사진 누끼 모양 그대로의 캐릭터빵이 부풀고 노릇하게 구워짐. 빵 윗면엔 사진이 구운 자국으로 찍히고 | 문이 열려 안을 보여줌 | 띵! 빵이 나오고 펑! 오븐이 사라지며 하얀 접시에 담긴 빵만 남음 |
 | 🥚 알 (하얀 달걀·갈색 달걀·공룡알은 바닥에 알만, 판타지 알은 금색 받침대) | 무드등처럼 안에서 점점 밝게 빛남. 금이 늘며 껍질 부스러기가 떨어지고 갈수록 자주 꿈틀 | 흔들흔들 | 윗껍질이 날아가고 사진이 나옴 |
+| 🎄 트리 (따뜻한 전구 트리·알록달록 트리) | 전구가 하나씩 켜지고, 따뜻한 트리는 장식과 선물이 늘어남 | 방울 소리와 함께 반짝 | 꼭대기 별이 켜지고 반짝이 가루가 휘날리며 징글벨 |
+| 🌙 달 | 보름달이 점점 기울어 사라지고, 없던 사진(없으면 늑대 실루엣)이 점점 또렷해짐 | 짧은 늑대 울음 | 달이 사라진 하늘에 하울링 |
+| ⛪ Confession Room | 오른쪽 문 안의 사진이 점점 또렷해지고, 막바지엔 장미창 빛이 비침 | 똑똑 두드리면 오른쪽 문이 열림 · 왼쪽 자물쇠는 덜컹 | 종소리 → 장미창 빛 → 오른쪽 문 → 자물쇠가 풀려 왼쪽 문까지 열림 |
+
+테마마다 클릭·D-day 효과음이 달라요(메뉴의 **효과음**으로 끄고 켜기). D-day 소리는 밤 12시에 갑자기 울리지 않고, 그날 위젯을 처음 클릭할 때 나요.
 
 - macOS 14(Sonoma) 이상, Apple 실리콘·인텔 맥 모두
 - **윈도우 10·11(64비트)도 지원** → 아래 [윈도우 버전](#윈도우-버전) 참고
@@ -119,7 +124,10 @@ npm run dist                # win/dist/Ice-D-day-Windows-1.0.0.zip 만들기
 Sources/main.swift   맥 앱 껍데기 (투명 창, 마우스, 설정창, 자동 누끼, 메뉴바)
 win/                 윈도우 앱 껍데기 (Electron: main.js, 설정창, 누끼 cutout.js, 마우스 input.js)
 src/main.js          3D 장면 공통 부분 (Three.js)
-src/themes/          테마별 장면: ice.js, oven.js, egg.js
+src/themes/          테마별 장면: ice.js, oven.js, egg.js, tree.js, moon.js, confession.js
+src/sound.js         효과음 (대부분 Web Audio로 직접 합성, 늑대 울음만 녹음 파일)
+src/assets/          늑대 울음 녹음 (mp3, 번들에 포함)
+web/fonts/           D-day 글씨체 (Grenze Gotisch)
 src/util.js          테마들이 같이 쓰는 도구
 web/                 앱 안에 들어가는 화면 (index.html + 빌드된 ice.bundle.js)
 assets/icon.png      앱 아이콘
@@ -128,3 +136,10 @@ docs/                배포 안내
 ```
 
 저장 위치: 설정은 앱 기본 설정, 누끼 결과는 `~/Library/Application Support/IceDday/cutout-(위젯 id).png`.
+
+## 사용한 자료 (출처)
+
+- 늑대 울음: 옐로스톤 국립공원 소리 자료실 "Wolf Howls Near Passing Car" — National Park Service, 퍼블릭 도메인 (잡음 제거·편집해서 사용)
+- D-day 글씨체: [Grenze Gotisch](https://github.com/Omnibus-Type/Grenze-Gotisch) — SIL Open Font License 1.1 (`web/fonts/OFL-GrenzeGotisch.txt`)
+- 트리 D-day 멜로디: 징글벨 (James Lord Pierpont, 1857) — 퍼블릭 도메인
+- 그 밖의 소리·질감·모델은 모두 코드로 직접 만든 것
