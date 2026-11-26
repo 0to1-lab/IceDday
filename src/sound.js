@@ -14,6 +14,7 @@ function sample(name, t, gain = 1, wet = 0.15) {
 }
 
 function ac() {
+  if (ctx && ctx.state === 'closed') ctx = null;   // 닫힌 소리 장치는 버리고 새로 만듦
   if (ctx) return ctx;
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return null;
@@ -222,17 +223,32 @@ const SOUNDS = {
   },
 };
 
+// 소리 장치 깨우기: 맥이 잠들었다 깨거나 이어폰·스피커가 바뀌면 소리 장치가 '멈춤'이나 '끊김'(interrupted) 상태가 됨.
+// 다시 켜 보고, 잠깐 안에 안 켜지면 장치를 새로 만들어서라도 소리가 나게 함
+function wake(c) {
+  if (c.state === 'running') return Promise.resolve(c);
+  const resumed = c.resume().then(() => c).catch(() => null);
+  const timeout = new Promise(r => setTimeout(() => r(null), 400));
+  return Promise.race([resumed, timeout]).then(ok => {
+    if (ok && ok.state === 'running') return ok;
+    try { c.close(); } catch (e) {}
+    ctx = null; const n = ac(); if (n.state !== 'running') n.resume().catch(() => {});
+    return n;
+  });
+}
+
 export const Sound = {
   get enabled() { return enabled; },
   setEnabled(on) { enabled = !!on; },
   /** 사용자가 한 번 누른 뒤에야 소리가 나는 브라우저가 있어서, 클릭 때마다 깨워 둠 */
-  unlock() { const c = ac(); if (!c) return; if (c.state === 'suspended') c.resume(); unlocked = true; },
+  unlock() { const c = ac(); if (!c) return; wake(c); unlocked = true; },
   get unlocked() { return unlocked && ctx && ctx.state === 'running'; },
   play(name, delay = 0) {
     if (!enabled || !SOUNDS[name]) return;
     const c = ac(); if (!c) return;
-    if (c.state === 'suspended') c.resume();
-    try { SOUNDS[name](c.currentTime + 0.02 + delay); } catch (e) { console.warn('sound', name, e); }
+    const go = (cc) => { try { SOUNDS[name](cc.currentTime + 0.02 + delay); } catch (e) { console.warn('sound', name, e); } };
+    if (c.state === 'running') return go(c);
+    wake(c).then(go);
   },
   names: Object.keys(SOUNDS),
 };

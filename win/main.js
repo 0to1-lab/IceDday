@@ -352,9 +352,10 @@ function buildMenu() {
   t.push({ type: 'separator' }, { label: '＋ 위젯 추가', click: addWidget }, ...appItems(), { type: 'separator' }, { label: '종료', click: () => app.quit() });
   return Menu.buildFromTemplate(t);
 }
-// 위젯을 오른쪽 클릭했을 때: 그 위젯 메뉴 + 위젯 추가 + 종료
+// 위젯을 오른쪽 클릭했을 때: 그 위젯 메뉴 + 위젯 추가 + 효과음 + 종료
 function contextMenu(w) {
-  return Menu.buildFromTemplate([...updateItems(), ...widgetItems(w), { type: 'separator' }, { label: '＋ 위젯 추가', click: addWidget }, { label: '종료', click: () => app.quit() }]);
+  const sound = appItems().find(i => i.label === '효과음');   // 효과음은 위젯에서도 바로 끌 수 있게
+  return Menu.buildFromTemplate([...updateItems(), ...widgetItems(w), { type: 'separator' }, { label: '＋ 위젯 추가', click: addWidget }, sound, { label: '종료', click: () => app.quit() }]);
 }
 let lastMenuKey = '';
 function refreshMenu() { lastMenuKey = menuKey(); tray?.setContextMenu(buildMenu()); }

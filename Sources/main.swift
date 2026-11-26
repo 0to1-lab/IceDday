@@ -318,6 +318,8 @@ final class Widget: NSObject, WKScriptMessageHandler {
         config.userContentController.add(self, name: "ice")
         config.mediaTypesRequiringUserActionForPlayback = []   // 테마 효과음 (클릭은 네이티브 뷰가 받아서 웹에는 '사용자 동작'이 안 잡힘)
         web = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: config)
+        // 문제가 생겼을 때 Safari의 '개발자용' 메뉴에서 위젯 화면을 열어 볼 수 있게 (소리·오류 확인용)
+        if #available(macOS 13.3, *) { web.isInspectable = true }
         web.setValue(false, forKey: "drawsBackground")      // 웹뷰 배경 투명
         web.underPageBackgroundColor = .clear
         web.autoresizingMask = [.width, .height]
