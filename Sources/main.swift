@@ -316,7 +316,7 @@ final class Widget: NSObject, WKScriptMessageHandler {
 
         let config = WKWebViewConfiguration()
         config.userContentController.add(self, name: "ice")
-        config.mediaTypesRequiringUserActionForAudioPlayback = []   // 테마 효과음 (클릭은 네이티브 뷰가 받아서 웹에는 '사용자 동작'이 안 잡힘)
+        config.mediaTypesRequiringUserActionForPlayback = []   // 테마 효과음 (클릭은 네이티브 뷰가 받아서 웹에는 '사용자 동작'이 안 잡힘)
         web = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: config)
         web.setValue(false, forKey: "drawsBackground")      // 웹뷰 배경 투명
         web.underPageBackgroundColor = .clear
